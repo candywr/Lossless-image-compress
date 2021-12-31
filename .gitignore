@@ -1,0 +1,6 @@
+ckpts/**
+*.log
+*.png
+*.tar
+plot.py
+demo.py
