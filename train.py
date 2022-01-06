@@ -96,7 +96,7 @@ class RateLoss_L2(nn.Module):
         out['L2_loss'] = output['L2_loss']
 
         out['loss'] = out["bpp_loss"] + out['L2_loss'] * self.lmbda
-        print("L2 loss:/n", out['loss'])
+        # print("L2 loss:/n", out['loss'])
         return out
 
 class AverageMeter:
@@ -313,7 +313,7 @@ def parse_args(argv):
 def main(argv):
     type = 'mse'
     args = parse_args(argv)
-    ckpt_path = "./ckpts"
+    ckpt_path = "./ckpts/"
     if not os.path.exists(ckpt_path):
         os.mkdir(ckpt_path)
     if args.seed is not None:
@@ -361,7 +361,7 @@ def main(argv):
         net = CustomDataParallel(net)
 
     optimizer, aux_optimizer = configure_optimizers(net, args)
-    milestones = [2]
+    milestones = [60]
     lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1, last_epoch=-1)
     criterion = RateLoss(lmbda=args.lmbda, type=type)
     criterion_L2 = RateLoss_L2(lmbda=args.lmbda, type=type)

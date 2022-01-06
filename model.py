@@ -107,7 +107,7 @@ class cheng2020_lossless(CompressionModel):
         self.mse = nn.MSELoss()
 
     def L2_norm(self, mean, target):
-        C = target.size()[1] 
+        C = target.size()[1]
         for i in range(self.K):
             # print(i)
             # print("mean: ", mean[:,i*C:(i+1)*C,:,:].size())
@@ -142,7 +142,7 @@ class cheng2020_lossless(CompressionModel):
         )
         _, x_hat_likelihoods = self.gaussian_conditional_lossless(x,  scales_hat_2, means=means_hat_2)
 
-        L2_loss = self.L2_norm(means_hat, y_hat) + self.L2_norm(means_hat_2, x_hat) 
+        L2_loss = self.L2_norm(means_hat, y_hat) + self.L2_norm(means_hat_2, x_hat)
         return {
             "x_hat": x_hat,
             "likelihoods": {"y": y_likelihoods, "z": z_likelihoods, "x_hat": x_hat_likelihoods},
@@ -177,17 +177,24 @@ class cheng2020_lossless_GMM(cheng2020_lossless):
             nn.LeakyReLU(inplace=True),
             nn.Conv2d(N * 8 // 3, N * 3 * K, 1),
         )
-
+########################################################################################################################
+        self.entropy_parameters_2 = nn.Sequential(
+            nn.Conv2d(27, 27 * 10 // 3, 1),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(27 * 10 // 3, 27 * 8 // 3, 1),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(27 * 8 // 3, 27 * 3 * K, 1),
+        )
 
     def forward(self, x):
         y = self.g_a(x)
         z = self.h_a(y)
         z_hat, z_likelihoods = self.entropy_bottleneck(z)
         params = self.h_s(z_hat)
+
         y_hat = self.gaussian_conditional.quantize(
             y, "noise" if self.training else "dequantize"
         )
-        # print("y_hat:",y_hat.shape)
         ctx_params = self.context_prediction(y_hat)
         gaussian_params = self.entropy_parameters(
             torch.cat((params, ctx_params), dim=1)
@@ -199,9 +206,11 @@ class cheng2020_lossless_GMM(cheng2020_lossless):
         weight = torch.reshape(weight,(weight.size(0), weight.size(1)*weight.size(2), weight.size(3), weight.size(4)))
         # print(weight.size())
         _, y_likelihoods = self.gaussian_conditional(y, scales_hat, means=means_hat, weights=weight)
-        gaussian_params_2 = self.g_s(y_hat)
+        params_2 = self.g_s(y_hat)
+        # print("params_2: ",params_2.size())
+        gaussian_params_2 = self.entropy_parameters_2(params_2)
 
-        scales_hat_2, means_hat_2, weight_2 = gaussian_params_2.chunk(3, 1)
+        scales_hat_2, means_hat_2, weight_2 = params_2.chunk(3, 1)
         weight_2 = torch.reshape(weight_2,(weight_2.size(0), self.K, weight_2.size(1)//self.K, weight_2.size(2), weight_2.size(3)))
         weight_2 = nn.functional.softmax(weight_2,dim=1)
         weight_2 = torch.reshape(weight_2,(weight_2.size(0), weight_2.size(1)*weight_2.size(2), weight_2.size(3), weight_2.size(4)))
@@ -210,7 +219,7 @@ class cheng2020_lossless_GMM(cheng2020_lossless):
         )
         _, x_hat_likelihoods = self.gaussian_conditional_lossless(x,  scales_hat_2, means=means_hat_2, weights=weight_2)
 
-        L2_loss = self.L2_norm(means_hat, y_hat) + self.L2_norm(means_hat_2, x_hat) 
+        L2_loss = self.L2_norm(means_hat, y_hat) + self.L2_norm(means_hat_2, x_hat)
         return {
             "x_hat": x_hat,
             "likelihoods": {"y": y_likelihoods, "z": z_likelihoods, "x_hat": x_hat_likelihoods},
